@@ -1,7 +1,13 @@
-#define TRANSACTIONS 10
-#define MONEY_AMOUNT 100.00
-#define INITIAL_MONEY_AMOUNT 1000.00
-#define AVAILABLE_OPS 4
+#ifndef BANK_ACCOUNT_H                                                  // include guard
+#define BANK_ACCOUNT_H   
+
+#include <stdio.h>                                                      // printf()
+#include <stdlib.h>                                                     // atoi(), exit(), ...
+#include <pthread.h>                                                    // pthread types and functions
+#include <time.h>                                                       // to use a precise clock
+#include <unistd.h>                                                     // sleep() to avoid busy-waiting
+
+// Macros of control
 #define MAINLOGS 6
 typedef enum
 {
@@ -31,6 +37,7 @@ FILE* ErrorsLog;
 FILE* TransferenceLog;
 FILE* WithdrawLog;
 
+// All context needed on an transaction
 typedef struct {
     unsigned long thread_id;
     unsigned long account_src;
@@ -46,7 +53,6 @@ typedef struct {
 
 
 // Functions declarations
-void orderAccounts(unsigned long *firstAccountLock, unsigned long *secondAccountLock);
 void get_exact_time(char *buffer);
 void log_deposit_succesfull(FILE* LogFile, const LogContext *ctx);
 void log_withdraw_succesfull(FILE* LogFile, const LogContext *ctx);
@@ -54,6 +60,8 @@ void log_withdraw_failed(FILE* LogFile, const LogContext *ctx);
 void log_check_succesfull(FILE* LogFile, const LogContext *ctx);
 void log_transfer_succesfull(FILE* LogFile, const LogContext *ctx);
 void log_transfer_failed(FILE* LogFile, const LogContext *ctx);
+void orderAccounts(unsigned long *firstAccountLock, unsigned long *secondAccountLock);
+void safeSuicide();
 
 
 
@@ -301,6 +309,8 @@ void get_exact_time(char *buffer)
 
 void log_deposit_succesfull(FILE* LogFile, const LogContext *ctx)
 {
+  if(LogFile == NULL) safeSuicide();
+
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
   fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| ACCOUNT   :  %lu\n", ctx->account_src);
@@ -312,6 +322,8 @@ void log_deposit_succesfull(FILE* LogFile, const LogContext *ctx)
 
 void log_withdraw_succesfull(FILE* LogFile, const LogContext *ctx)
 {
+  if(LogFile == NULL) safeSuicide();
+  
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
   fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| ACCOUNT   :  %lu\n", ctx->account_src);
@@ -323,6 +335,8 @@ void log_withdraw_succesfull(FILE* LogFile, const LogContext *ctx)
 
 void log_withdraw_failed(FILE* LogFile, const LogContext *ctx)
 {
+  if(LogFile == NULL) safeSuicide();
+
   fprintf(LogFile, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
   fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| FAILED WIRHDRAW! \n");
@@ -334,6 +348,8 @@ void log_withdraw_failed(FILE* LogFile, const LogContext *ctx)
 
 void log_check_succesfull(FILE* LogFile, const LogContext *ctx)
 {
+  if(LogFile == NULL) safeSuicide();
+
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
   fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| ACCOUNT       :  %lu\n", ctx->account_src);
@@ -344,6 +360,8 @@ void log_check_succesfull(FILE* LogFile, const LogContext *ctx)
 
 void log_transfer_succesfull(FILE* LogFile, const LogContext *ctx)
 {
+  if(LogFile == NULL) safeSuicide();
+
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
   fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| SOURCE ACCOUNT    :  %lu\n", ctx->account_src);
@@ -358,6 +376,8 @@ void log_transfer_succesfull(FILE* LogFile, const LogContext *ctx)
 
 void log_transfer_failed(FILE* LogFile, const LogContext *ctx)
 {
+  if(LogFile == NULL) safeSuicide();
+
   fprintf(LogFile, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
   fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| FAILED TRANSFERENCE! \n");
@@ -367,3 +387,13 @@ void log_transfer_failed(FILE* LogFile, const LogContext *ctx)
   fprintf(LogFile, "| Transference aborted because would cause debt of $%.02f\n to Account %lu", ctx->new_amountSrc, ctx->account_src);
   fprintf(LogFile, "|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n\n");
 }
+
+
+void safeSuicide()
+{
+  fprintf(stderr, "\nSomething went wrong when trying to write in a file, SUICIDE TIME\n");
+  exit(5);
+}
+
+
+#endif
