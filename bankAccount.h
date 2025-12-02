@@ -31,39 +31,50 @@ FILE* ErrorsLog;
 FILE* TransferenceLog;
 FILE* WithdrawLog;
 
-
+typedef struct {
+    unsigned long thread_id;
+    unsigned long account_src;
+    unsigned long account_dst;
+    double amount;
+    double old_amountSrc;
+    double old_amountDst;
+    double new_amountSrc;
+    double new_amountDst;
+    char timeStr[100];
+} LogContext;
 
 
 
 // Functions declarations
 void orderAccounts(unsigned long *firstAccountLock, unsigned long *secondAccountLock);
 void get_exact_time(char *buffer);
-void log_deposit_succesfull();
-void log_withdraw_succesfull();
-void log_withdraw_failed();
-void log_check_succesfull();
-void log_transfer_succesfull();
-void log_transfer_failed();
+void log_deposit_succesfull(FILE* LogFile, const LogContext *ctx);
+void log_withdraw_succesfull(FILE* LogFile, const LogContext *ctx);
+void log_withdraw_failed(FILE* LogFile, const LogContext *ctx);
+void log_check_succesfull(FILE* LogFile, const LogContext *ctx);
+void log_transfer_succesfull(FILE* LogFile, const LogContext *ctx);
+void log_transfer_failed(FILE* LogFile, const LogContext *ctx);
 
 
 
 // add amount to specific Account Balance
 void deposit(double amount, unsigned long account, unsigned long thread_id)
 {
-  time_t currTime;
-  double new_amount;
-  double old_amount;
+  LogContext ctx;
+  ctx.account_src = account;
+  ctx.thread_id   = thread_id;
+  ctx.amount      = amount;
 
   pthread_mutex_lock(&Locks[account]);
     
     // OPERATION:
-    old_amount = Balances[account];  
-    new_amount = old_amount + amount;
-    Balances[account] = new_amount;
-    char timeStr[100]; get_exact_time(timeStr);
+    ctx.old_amountSrc = Balances[account];  
+    ctx.new_amountSrc = ctx.old_amountSrc + amount;
+    Balances[account] = ctx.new_amountSrc;
+    get_exact_time(ctx.timeStr);
     
     // ACCOUNT LOG:
-    log_deposit_succesfull(AccountsLogs[account], thread_id, account, amount, timeStr, old_amount, new_amount)
+    log_deposit_succesfull(AccountsLogs[account], &ctx);
 
   pthread_mutex_unlock(&Locks[account]);
 
@@ -71,12 +82,12 @@ void deposit(double amount, unsigned long account, unsigned long thread_id)
   pthread_mutex_lock(&MainLogsLocks[depositIDX]);
     
     // MAIN LOG:
-    log_deposit_succesfull(DepositLog, thread_id, account, amount, timeStr, old_amount, new_amount)
+    log_deposit_succesfull(DepositLog, &ctx);
   
   pthread_mutex_unlock(&MainLogsLocks[depositIDX]);
 
   // THREAD LOG:
-  log_deposit_succesfull(ThreadsLogs[thread_id], thread_id, account, amount, timeStr, old_amount, new_amount)
+  log_deposit_succesfull(ThreadsLogs[thread_id], &ctx);
 
   return;
 }
@@ -86,29 +97,30 @@ void deposit(double amount, unsigned long account, unsigned long thread_id)
 // subtract amount from specific Account Balance
 void withdraw(double amount, unsigned long account, unsigned long thread_id)
 {
-  time_t currTime;
-  double new_amount;
-  double old_amount;
-  short errorOcurrence = 0;
+  LogContext ctx;
+  ctx.account_src = account;
+  ctx.thread_id   = thread_id;
+  ctx.amount      = amount;
+  short errorOcurrence = 0;  
 
   pthread_mutex_lock(&Locks[account]);
 
-    old_amount = Balances[account];
-    new_amount = old_amount - amount;
-    char timeStr[100]; get_exact_time(timeStr);
+    ctx.old_amountSrc = Balances[account];
+    ctx.new_amountSrc = ctx.old_amountSrc - amount;
+    get_exact_time(ctx.timeStr);
 
-    if(new_amount < (double) 0.00)
+    if(ctx.new_amountSrc < (double) 0.00)
     {
       errorOcurrence = 1;
       // ACCOUNT LOG:
-      log_withdraw_failed(AccountsLogs[account], thread_id, account, amount, timeStr, old_amount, new_amount);
+      log_withdraw_failed(AccountsLogs[account], &ctx);
     }
     else
     {
       // OPERATION:
-      Balances[account] = new_amount;
+      Balances[account] = ctx.new_amountSrc;
       // ACCOUNT LOG:
-      log_withdraw_succesfull(AccountsLogs[account], thread_id, account, amount, timeStr, old_amount, new_amount);
+      log_withdraw_succesfull(AccountsLogs[account], &ctx);
     }
   
   pthread_mutex_unlock(&Locks[account]);
@@ -118,24 +130,24 @@ void withdraw(double amount, unsigned long account, unsigned long thread_id)
     pthread_mutex_lock(&MainLogsLocks[errorIDX]);
     
       // ERROR LOG:
-      log_withdraw_failed(ErrorsLog, thread_id, account, amount, timeStr, old_amount, new_amount);
+      log_withdraw_failed(ErrorsLog, &ctx);
 
     pthread_mutex_unlock(&MainLogsLocks[errorIDX]);
   
     // THREAD LOG:
-    log_withdraw_failed(ThreadsLogs[thread_id], thread_id, account, amount, timeStr, old_amount, new_amount);
+    log_withdraw_failed(ThreadsLogs[thread_id], &ctx);
   }
   else
   {
     pthread_mutex_lock(&MainLogsLocks[withdrawIDX]);
 
       // MAIN LOG:
-      log_withdraw_succesfull(WithdrawLog, thread_id, account, amount, timeStr, old_amount, new_amount);
+      log_withdraw_succesfull(WithdrawLog, &ctx);
 
     pthread_mutex_unlock(&MainLogsLocks[withdrawIDX]);
 
     // THREAD LOG:
-    log_withdraw_succesfull(ThreadsLogs[thread_id], thread_id, account, amount, timeStr, old_amount, new_amount);
+    log_withdraw_succesfull(ThreadsLogs[thread_id], &ctx);
   }
   return;
 }
@@ -145,19 +157,24 @@ void withdraw(double amount, unsigned long account, unsigned long thread_id)
 // check amount on specific Account Balance. Only case of output on the terminal
 void checkAmount(unsigned long account, unsigned long thread_id)
 {
+  LogContext ctx;
+  ctx.account_src = account;
+  ctx.thread_id   = thread_id;
+
   pthread_mutex_lock(&Locks[account]);
-    char timeStr[100]; get_exact_time(timeStr);
-    double currAmount = Balances[account];
+
+    get_exact_time(ctx.timeStr);
+    ctx.new_amountSrc = Balances[account];
 
     // TERMINAL LOG:
     printf("_________________________________________________________________________________________________\n");
-    printf("| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
-    printf("| ACCOUNT       :  %lu\n", account);
-    printf("| CURRENT AMOUNT:  $%.02f\n", currAmount);
+    printf("| [CHILD %lu] at %s\n|\n", ctx.thread_id, ctx.timeStr);
+    printf("| ACCOUNT       :  %lu\n", ctx.account_src);
+    printf("| CURRENT AMOUNT:  $%.02f\n", ctx.new_amountSrc);
     printf("|________________________________________________________________________________________________\n\n");
 
     // ACCOUNT LOG:
-    log_check_succesfull(AccountsLogs[account], thread_id, account, timeStr, currAmount);
+    log_check_succesfull(AccountsLogs[account], &ctx);
 
   pthread_mutex_unlock(&Locks[account]);
 
@@ -165,12 +182,12 @@ void checkAmount(unsigned long account, unsigned long thread_id)
   pthread_mutex_lock(&MainLogsLocks[checkIDX]);
     
     // MAIN LOG:
-    log_check_succesfull(CheckLog, thread_id, account, timeStr, currAmount);
+    log_check_succesfull(CheckLog, &ctx);
   
   pthread_mutex_unlock(&MainLogsLocks[checkIDX]);
   
   // THREAD LOG:
-  log_check_succesfull(ThreadsLogs[thread_id], thread_id, account, timeStr, currAmount);
+  log_check_succesfull(ThreadsLogs[thread_id], &ctx);
   
   return;
 }
@@ -182,26 +199,31 @@ void transfer(double amount, unsigned long account_src, unsigned long account_ds
 {
   if(account_dst == account_src) return;                                    // Trasnsferences to same account must be ignored.
 
+  LogContext ctx;
+  ctx.account_src = account_src;
+  ctx.account_dst = account_dst;
+  ctx.thread_id   = thread_id;
+  ctx.amount      = amount;
+
   unsigned long firstAccountLock  = account_src;                            
   unsigned long secondAccountLock = account_dst;                            
   orderAccounts(&firstAccountLock, &secondAccountLock);                     // Deadlock avoidance
 
-  double old_amountSrc;
-  double new_amountSrc;
-  double old_amountDst;
-  double new_amountDst;
-
+  short errorOcurrence = 0;
   pthread_mutex_lock(&Locks[firstAccountLock]);
     pthread_mutex_lock(&Locks[secondAccountLock]);
       
-      old_amountSrc = Balances[account_src];
-      new_amountSrc = old_amountSrc - amount;
-      old_amountDst = Balances[account_dst];
-      new_amountDst = old_amountDst + amount;
+      get_exact_time(ctx.timeStr);
+      ctx.old_amountSrc = Balances[account_src];
+      ctx.new_amountSrc = ctx.old_amountSrc - amount;
+      ctx.old_amountDst = Balances[account_dst];
+      ctx.new_amountDst = ctx.old_amountDst + amount;
 
-      if(new_amountSrc < 0)
+      if(ctx.new_amountSrc < 0)
       {
-        printf("Failed\n");
+        log_transfer_failed(AccountsLogs[account_src], &ctx);
+        errorOcurrence = 1;
+        //log_transfer_failed(AccountsLogs[account_dst], &ctx);     // We don't need to notify who is not receiving money
       }
       else
       {
@@ -210,22 +232,37 @@ void transfer(double amount, unsigned long account_src, unsigned long account_ds
         Balances[account_dst] += amount;
 
         // ACCOUNTS LOGS:
-        log_transfer_succesfull(AccountsLogs[account_src], thread_id, account_src, account_dst, amount, timeStr, old_amountSrc, old_amountDst, new_amountSrc, new_amountDst);
-        log_transfer_succesfull(AccountsLogs[account_dst], thread_id, account_src, account_dst, amount, timeStr, old_amountSrc, old_amountDst, new_amountSrc, new_amountDst);
+        log_transfer_succesfull(AccountsLogs[account_src], &ctx);
+        log_transfer_succesfull(AccountsLogs[account_dst], &ctx);
       }
 
     pthread_mutex_unlock(&Locks[secondAccountLock]);
   pthread_mutex_unlock(&Locks[firstAccountLock]);
 
-  pthread_mutex_lock(&MainLogsLocks[transferIDX]);
+  if(errorOcurrence)
+  {
+    pthread_mutex_lock(&MainLogsLocks[errorIDX]);
 
-    // MAIN LOG:
-    log_transfer_succesfull(TransferenceLog, thread_id, account_src, account_dst, amount, timeStr, old_amountSrc, old_amountDst, new_amountSrc, new_amountDst);
+      // MAIN LOG:
+      log_transfer_failed(ErrorsLog, &ctx);
 
-  pthread_mutex_unlock(&MainLogsLocks[transferIDX]);
-  
-  // THREAD LOG:
-  log_transfer_succesfull(ThreadsLogs[thread_id], thread_id, account_src, account_dst, amount, timeStr, old_amountSrc, old_amountDst, new_amountSrc, new_amountDst);
+    pthread_mutex_unlock(&MainLogsLocks[errorIDX]);
+    
+    // THREAD LOG:
+    log_transfer_failed(ThreadsLogs[thread_id], &ctx);
+  }
+  else
+  {
+    pthread_mutex_lock(&MainLogsLocks[transferIDX]);
+
+      // MAIN LOG:
+      log_transfer_succesfull(TransferenceLog, &ctx);
+
+    pthread_mutex_unlock(&MainLogsLocks[transferIDX]);
+    
+    // THREAD LOG:
+    log_transfer_succesfull(ThreadsLogs[thread_id], &ctx);
+  }
 
   return;
 }
@@ -262,32 +299,32 @@ void get_exact_time(char *buffer)
 
 
 
-void log_deposit_succesfull()
+void log_deposit_succesfull(FILE* LogFile, const LogContext *ctx)
 {
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
-  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
-  fprintf(LogFile, "| ACCOUNT   :  %lu\n", account);
-  fprintf(LogFile, "| OLD AMOUNT:  $%.02f\n", old_amount);
-  fprintf(LogFile, "| DEPOSITED :  $%.02f\n", amount);
-  fprintf(LogFile, "| NEW AMOUNT:  $%.02f\n", new_amount);
+  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
+  fprintf(LogFile, "| ACCOUNT   :  %lu\n", ctx->account_src);
+  fprintf(LogFile, "| OLD AMOUNT:  $%.02f\n", ctx->old_amountSrc);
+  fprintf(LogFile, "| DEPOSITED :  $%.02f\n", ctx->amount);
+  fprintf(LogFile, "| NEW AMOUNT:  $%.02f\n", ctx->new_amountSrc);
   fprintf(LogFile, "|________________________________________________________________________________________________\n\n");
 }
 
-void log_withdraw_succesfull()
+void log_withdraw_succesfull(FILE* LogFile, const LogContext *ctx)
 {
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
-  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
-  fprintf(LogFile, "| ACCOUNT   :  %lu\n", account);
-  fprintf(LogFile, "| OLD AMOUNT:  $%.02f\n", old_amount);
-  fprintf(LogFile, "| WITHDRAW  :  $%.02f\n", amount);
-  fprintf(LogFile, "| NEW AMOUNT:  $%.02f\n", new_amount);
+  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
+  fprintf(LogFile, "| ACCOUNT   :  %lu\n", ctx->account_src);
+  fprintf(LogFile, "| OLD AMOUNT:  $%.02f\n", ctx->old_amountSrc);
+  fprintf(LogFile, "| WITHDRAW  :  $%.02f\n", ctx->amount);
+  fprintf(LogFile, "| NEW AMOUNT:  $%.02f\n", ctx->new_amountSrc);
   fprintf(LogFile, "|________________________________________________________________________________________________\n\n");
 }
 
-void log_withdraw_failed()
+void log_withdraw_failed(FILE* LogFile, const LogContext *ctx)
 {
   fprintf(LogFile, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
+  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| FAILED WIRHDRAW! \n");
   fprintf(LogFile, "| ACCOUNT   :  %lu\n", ctx->account_src);
   fprintf(LogFile, "| Tried to withdraw $%.02f, but had only $%.02f\n", ctx->amount, ctx->old_amountSrc);
@@ -295,38 +332,38 @@ void log_withdraw_failed()
   fprintf(LogFile, "|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n\n");
 }
 
-void log_check_succesfull(currAmount)
+void log_check_succesfull(FILE* LogFile, const LogContext *ctx)
 {
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
-  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
-  fprintf(LogFile, "| ACCOUNT       :  %lu\n", account);
-  fprintf(LogFile, "| CURRENT AMOUNT:  $%.02f\n", currAmount);
+  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
+  fprintf(LogFile, "| ACCOUNT       :  %lu\n", ctx->account_src);
+  fprintf(LogFile, "| CURRENT AMOUNT:  $%.02f\n", ctx->new_amountSrc);
   fprintf(LogFile, "|________________________________________________________________________________________________\n\n");
 
 }
 
-void log_transfer_succesfull()
+void log_transfer_succesfull(FILE* LogFile, const LogContext *ctx)
 {
   fprintf(LogFile, "_________________________________________________________________________________________________\n");
-  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
-  fprintf(LogFile, "| SOURCE ACCOUNT    :  %lu\n", account_src);
-  fprintf(LogFile, "| DESTINY ACCOUNT   :  %lu\n", account_dst);
-  fprintf(LogFile, "| SOURCE OLD AMOUNT :  $%.02f\n", old_amountSrc);
-  fprintf(LogFile, "| DESTINY OLD AMOUNT:  $%.02f\n", old_amountDst);
-  fprintf(LogFile, "| TRANSFERED        :  $%.02f\n", amount);
-  fprintf(LogFile, "| SOURCE NEW AMOUNT :  $%.02f\n", new_amountSrc);
-  fprintf(LogFile, "| DESTINY NEW AMOUNT:  $%.02f\n", new_amountDst);
+  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
+  fprintf(LogFile, "| SOURCE ACCOUNT    :  %lu\n", ctx->account_src);
+  fprintf(LogFile, "| DESTINY ACCOUNT   :  %lu\n", ctx->account_dst);
+  fprintf(LogFile, "| SOURCE OLD AMOUNT :  $%.02f\n", ctx->old_amountSrc);
+  fprintf(LogFile, "| DESTINY OLD AMOUNT:  $%.02f\n", ctx->old_amountDst);
+  fprintf(LogFile, "| TRANSFERED        :  $%.02f\n", ctx->amount);
+  fprintf(LogFile, "| SOURCE NEW AMOUNT :  $%.02f\n", ctx->new_amountSrc);
+  fprintf(LogFile, "| DESTINY NEW AMOUNT:  $%.02f\n", ctx->new_amountDst);
   fprintf(LogFile, "|________________________________________________________________________________________________\n\n");
 }
 
-void log_transfer_failed()
+void log_transfer_failed(FILE* LogFile, const LogContext *ctx)
 {
   fprintf(LogFile, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
-  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
+  fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", ctx->thread_id, ctx->timeStr);
   fprintf(LogFile, "| FAILED TRANSFERENCE! \n");
-  fprintf(LogFile, "| SOURCE ACCOUNT    :  %lu\n", account_src);
-  fprintf(LogFile, "| DESTINY ACCOUNT   :  %lu\n", account_dst);
-  fprintf(LogFile, "| Account %lu Tried to transfer $%.02f, to Account %lu but had only $%.02f\n", account_src, amount, account_dst, old_amountSrc);
-  fprintf(LogFile, "| Transference aborted because would cause debt of $%.02f\n to Account %lu", new_amountSrc, account_src);
+  fprintf(LogFile, "| SOURCE ACCOUNT    :  %lu\n", ctx->account_src);
+  fprintf(LogFile, "| DESTINY ACCOUNT   :  %lu\n", ctx->account_dst);
+  fprintf(LogFile, "| Account %lu Tried to transfer $%.02f, to Account %lu but had only $%.02f\n", ctx->account_src, ctx->amount, ctx->account_dst, ctx->old_amountSrc);
+  fprintf(LogFile, "| Transference aborted because would cause debt of $%.02f\n to Account %lu", ctx->new_amountSrc, ctx->account_src);
   fprintf(LogFile, "|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n\n");
 }
