@@ -6,8 +6,8 @@
 
 // Macros of control
 #define AVAILABLE_OPS 4                                                 // Number of operations (depoisite, withdraw, transfer and check)
-#define INITIAL_MONEY_AMOUNT 1000.00                                    // Initial money for all accounts
-#define MONEY_AMOUNT 100.00                                             // Amount of money used on all transactions
+#define INITIAL_MONEY_AMOUNT 100000.00                                    // Initial money for all accounts
+#define MONEY_AMOUNT 1000.00                                             // Amount of money used on all transactions
 #define TRANSACTIONS 10                                                 // Amount of transactions that each thread does
 
 
@@ -28,8 +28,8 @@ void processCommandLine(unsigned long *numThreads, unsigned long *numAccounts, i
 
 int main(int argc, char** argv)
 {
-   // Clean all files used on the last execution
-   system("rm -f AccountLogs/*.txt ThreadLogs/*.txt");
+   system("rm -f AccountLogs/*.txt ThreadLogs/*.txt");               // Clean all files used on the last execution
+   system("mkdir -p GenericLogs AccountLogs ThreadLogs");            // If the directoried aren't here, create them
 
    double initialBalances = (double)INITIAL_MONEY_AMOUNT;            // initial balance on all accounts
    
