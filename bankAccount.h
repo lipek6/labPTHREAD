@@ -289,9 +289,9 @@ void log_withdraw_failed()
   fprintf(LogFile, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n");
   fprintf(LogFile, "| [CHILD %lu] at %s\n|\n", thread_id, timeStr);
   fprintf(LogFile, "| FAILED WIRHDRAW! \n");
-  fprintf(LogFile, "| ACCOUNT   :  %lu\n", account);
-  fprintf(LogFile, "| Tried to withdraw $%.02f, but had only $%.02f\n", amount, old_amount);
-  fprintf(LogFile, "| Withdraw cancelled because would cause debt of $%.02f\n", new_amount);
+  fprintf(LogFile, "| ACCOUNT   :  %lu\n", ctx->account_src);
+  fprintf(LogFile, "| Tried to withdraw $%.02f, but had only $%.02f\n", ctx->amount, ctx->old_amountSrc);
+  fprintf(LogFile, "| Withdraw cancelled because would cause debt of $%.02f\n", ctx->new_amountSrc);
   fprintf(LogFile, "|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n\n");
 }
 
