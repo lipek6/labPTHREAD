@@ -2,17 +2,13 @@
 #include <stdlib.h>                                                     // atoi(), exit(), ...
 #include <pthread.h>                                                    // pthread types and functions
 #include <unistd.h>                                                     // sleep() to avoid busy-waiting
+#include <time.h>
 #include "bankAccount.h"                                                // bank account info
-#define TRANSACTIONS 10
-#define MONEY_AMOUNT 100.00
-#define AVAILABLE_OPS 4
-
 void processCommandLine(unsigned long *numThreads, unsigned long *numAccounts, int argc, char** argv);
 void doRandTransactions(unsigned long id);
 void checkStringConversion(char *endptr);
 void* child(void * buf);
-
-
+void checkFilePtr(FILE * fileptr);
 
 
 
@@ -21,54 +17,75 @@ int main(int argc, char** argv)
    time_t currTime; time(&currTime);
    srand(currTime);
 
-   
-
-
-
-   double initialBalances = 1000.00;                                    // initial balance on all accounts
-   unsigned long id = 0;                                                // loop control variable
+   double initialBalances = (double)INITIAL_MONEY_AMOUNT;            // initial balance on all accounts
    
    processCommandLine(&numThreads, &numAccounts, argc, argv);// get desired # of all that shit :)
    
-   Balances = malloc(numAccounts * sizeof(double));          // allocate all that shit :)
-   Children = malloc(numThreads  * sizeof(pthread_t));   
-   Locks    = malloc(numAccounts * sizeof(pthread_mutex_t));
-   
+   Balances      = malloc(numAccounts * sizeof(double));          // allocate all that shit :)
+   Children      = malloc(numThreads  * sizeof(pthread_t));   
+   Locks         = malloc(numAccounts * sizeof(pthread_mutex_t));
+   ThreadsLogs   = malloc(numThreads  * sizeof(FILE*));
+   AccountsLogs  = malloc(numAccounts * sizeof(FILE*));
+
+
    printf("NUMBER OF THREADS : %lu\n", numThreads);
    printf("NUMBER OF ACCOUNTS: %lu\n", numAccounts);
    printf("INITIAL BALANCES  : %f\n\n", initialBalances);
-
    
-   // SETUP
-   for(int i = 0; i < numAccounts; i++)
+   // Write some introduction in each file
+   CheckLog        = fopen("Logs/CheckLog.txt",       "w"); pthread_mutex_init(&MainLogsLocks[0], NULL);
+   CompleteLog     = fopen("Logs/CompleteLog.txt",    "w"); pthread_mutex_init(&MainLogsLocks[1], NULL);
+   DepositLog      = fopen("Logs/DepositLog.txt",     "w"); pthread_mutex_init(&MainLogsLocks[2], NULL);
+   ErrorsLog       = fopen("Logs/ErrosLog.txt",       "w"); pthread_mutex_init(&MainLogsLocks[3], NULL);
+   TransferenceLog = fopen("Logs/TrasferenceLog.txt", "w"); pthread_mutex_init(&MainLogsLocks[4], NULL);
+   WithdrawLog     = fopen("Logs/WithdrawLog.txt",    "w"); pthread_mutex_init(&MainLogsLocks[5], NULL);
+
+
+   // ACCOUNTS SETUP:
+   char accFilename[100];     // Modify later
+   for(unsigned long id = 0; id < numAccounts; id++)
    {
-      Balances[i] = initialBalances;
-      pthread_mutex_init(&Locks[i], NULL);
+      sprintf(accFilename, "Acc%luLog.txt", id);
+      AccountsLogs[id] = fopen(accFilename, "w");
+      checkFilePtr(AccountsLogs[id]);
+      
+      Balances[id] = initialBalances;
+      pthread_mutex_init(&Locks[id], NULL);
    }
 
    
    // FORK:
-   for(id = 1; id < numThreads; id++)
+   char threadFilename[100];     // Modify later
+   for(unsigned long id = 0; id < numThreads; id++)
    {                   
-      pthread_create(&(Children[id-1]), NULL, child, (void*) id);       // handle for the child, attributes of the child, attributes of the child, args to that function
+      sprintf(threadFilename, "Thread%luLog.txt", id);
+      ThreadsLogs[id] = fopen(threadFilename, "w");
+      checkFilePtr(ThreadsLogs[id]);
+
+      pthread_create(&(Children[id]), NULL, child, (void*) id);       // handle for the child, attributes of the child, attributes of the child, args to that function.
    }
 
 
    // JOIN:
-   for(id = 1; id < numThreads; id++)
+   for(unsigned long id = 0; id < numThreads; id++)
    {
-      pthread_join(Children[id-1], NULL);
+      pthread_join(Children[id], NULL);
    }
 
    // PRINTING FINAL RESULTS
    printf("\nThe final balance of the account using %lu threads is $%.2f.\n\n", numThreads, Balances[0]);
    printf("\nThe final balance of the account using %lu threads is $%.2f.\n\n", numThreads, Balances[1]);
 
-   for(int i = 0; i < numAccounts; i++) pthread_mutex_destroy(&Locks[i]);// deallocate mutex
-   free(Children);                                                       // deallocate array
-   free(Balances);                                                       // deallocate array
-   free(Locks);                                                          // deallocate array
-  
+   for(int i = 0; i < numAccounts; i++) pthread_mutex_destroy(&Locks[i]);           // destroy mutexes
+   for(int i = 0; i < MAINLOGS;    i++) pthread_mutex_destroy(&MainLogsLocks[i]);   // destroy mutexes
+   for(unsigned long id = 0; id < numAccounts; id++) fclose(AccountsLogs[id]);      // close files
+   for(unsigned long id = 0; id < numThreads; id++)  fclose(ThreadsLogs[id]);       // close files
+   free(Children);                                                                  // deallocate array
+   free(Balances);                                                                  // deallocate array
+   free(Locks);                                                                     // deallocate array
+   free(AccountsLogs);                                                              // deallocate array
+   free(ThreadsLogs);                                                               // deallocate array
+
    return 0;
 }
 
@@ -97,7 +114,7 @@ void doRandTransactions(unsigned long id)
             withdraw(amount, account_src, id);
             break;
          case(2):
-            checkAmount(amount, account_src, id);
+            checkAmount(account_src, id);
             break;
          case(3):
             account_dst = abs(rand()) % numAccounts;
@@ -168,4 +185,13 @@ void checkStringConversion(char *endptr)
       exit(2);
    }
    return;
+}
+
+void checkFilePtr(FILE * fileptr)
+{
+   if(fileptr == NULL)
+   {
+      fprintf(stderr, "Error opening/creating log file.\n");
+      exit(3);
+   }
 }
