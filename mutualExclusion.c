@@ -1,6 +1,6 @@
 // COMPILATION  : gcc mutualExclusion.c -lpthread -o mutualExclusion
 // PROGRAM USAGE: ./mutualExclusion <DESIRED AMOUNT OF THREADS> <DESIRED AMOUNT OF ACCOUNTS>
-
+// MEMORY LEAKS : valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./mutualExclusion 10 10
 #include "bankAccount.h"                                                // bank account info
 
 
@@ -52,7 +52,7 @@ int main(int argc, char** argv)
    CheckLog        = fopen("GenericLogs/CheckLog.txt",       "w"); pthread_mutex_init(&MainLogsLocks[0], NULL); checkFilePtr(CheckLog); 
    CompleteLog     = fopen("GenericLogs/CompleteLog.txt",    "w"); pthread_mutex_init(&MainLogsLocks[1], NULL); checkFilePtr(CompleteLog);
    DepositLog      = fopen("GenericLogs/DepositLog.txt",     "w"); pthread_mutex_init(&MainLogsLocks[2], NULL); checkFilePtr(DepositLog);
-   ErrorsLog       = fopen("GenericLogs/ErrorsLog.txt",       "w"); pthread_mutex_init(&MainLogsLocks[3], NULL); checkFilePtr(ErrorsLog);
+   ErrorsLog       = fopen("GenericLogs/ErrorsLog.txt",      "w"); pthread_mutex_init(&MainLogsLocks[3], NULL); checkFilePtr(ErrorsLog);
    TransferenceLog = fopen("GenericLogs/TrasferenceLog.txt", "w"); pthread_mutex_init(&MainLogsLocks[4], NULL); checkFilePtr(TransferenceLog);
    WithdrawLog     = fopen("GenericLogs/WithdrawLog.txt",    "w"); pthread_mutex_init(&MainLogsLocks[5], NULL); checkFilePtr(WithdrawLog);
 
